@@ -233,6 +233,89 @@ def stream_translation(text, placeholder, target_language):
         time.sleep(0.05)
 
 
+def upload_file_with_progress(uploaded_file):
+    """Upload file with real-time progress tracking"""
+    if not uploaded_file:
+        return None, None
+    
+    # Get total file size
+    uploaded_file.seek(0, 2)  # Seek to end
+    total_size = uploaded_file.tell()
+    uploaded_file.seek(0)  # Reset to beginning
+    
+    # Create progress containers
+    progress_container = st.container()
+    
+    with progress_container:
+        st.subheader("📤 File Upload Progress")
+        progress_bar = st.progress(0)
+        status_col1, status_col2 = st.columns(2)
+        
+        with status_col1:
+            size_text = st.empty()
+            speed_text = st.empty()
+        
+        with status_col2:
+            percent_text = st.empty()
+            eta_text = st.empty()
+    
+    # Read file in chunks with progress tracking
+    chunk_size = 1024 * 1024  # 1MB chunks
+    file_bytes = b""
+    bytes_read = 0
+    start_time = time.time()
+    
+    while True:
+        chunk = uploaded_file.read(chunk_size)
+        if not chunk:
+            break
+            
+        file_bytes += chunk
+        bytes_read += len(chunk)
+        
+        # Calculate progress
+        progress = bytes_read / total_size
+        elapsed_time = time.time() - start_time
+        
+        # Calculate upload speed and ETA
+        if elapsed_time > 0:
+            speed_mbps = (bytes_read / (1024 * 1024)) / elapsed_time
+            remaining_bytes = total_size - bytes_read
+            eta_seconds = remaining_bytes / (speed_mbps * 1024 * 1024) if speed_mbps > 0 else 0
+        else:
+            speed_mbps = 0
+            eta_seconds = 0
+        
+        # Update progress display
+        progress_bar.progress(progress)
+        
+        size_text.text(f"📊 {bytes_read / (1024*1024):.1f} MB / {total_size / (1024*1024):.1f} MB")
+        speed_text.text(f"⚡ Speed: {speed_mbps:.1f} MB/s")
+        percent_text.text(f"📈 Progress: {progress * 100:.1f}%")
+        
+        if eta_seconds > 0:
+            eta_text.text(f"⏱️ ETA: {eta_seconds:.1f}s")
+        else:
+            eta_text.text("⏱️ ETA: Calculating...")
+        
+        # Small delay to make progress visible for smaller files
+        if total_size < 10 * 1024 * 1024:  # Files smaller than 10MB
+            time.sleep(0.1)
+    
+    # Final update
+    progress_bar.progress(1.0)
+    size_text.text(f"✅ Upload Complete: {total_size / (1024*1024):.1f} MB")
+    speed_text.text(f"⚡ Average Speed: {(total_size / (1024*1024)) / elapsed_time:.1f} MB/s")
+    percent_text.text("📈 Progress: 100%")
+    eta_text.text("⏱️ Upload Complete!")
+    
+    # Clear progress after showing completion
+    time.sleep(2)
+    progress_container.empty()
+    
+    return file_bytes, get_file_hash(file_bytes)
+
+
 def main():
     st.set_page_config(
         page_title="Audio/Video Transcription & Translation",
@@ -287,9 +370,13 @@ def main():
     )
 
     if uploaded_file:
-        # Get file content and hash
-        file_bytes = uploaded_file.read()
-        file_hash = get_file_hash(file_bytes)
+        # Upload file with progress tracking
+        with st.spinner("📤 Preparing upload..."):
+            file_bytes, file_hash = upload_file_with_progress(uploaded_file)
+        
+        if file_bytes is None:
+            st.error("❌ Failed to upload file")
+            return
 
         # Reset processing state when new file is uploaded
         if st.session_state.current_file_hash != file_hash:

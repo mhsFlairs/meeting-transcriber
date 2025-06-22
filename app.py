@@ -237,82 +237,88 @@ def upload_file_with_progress(uploaded_file):
     """Upload file with real-time progress tracking"""
     if not uploaded_file:
         return None, None
-    
+
     # Get total file size
     uploaded_file.seek(0, 2)  # Seek to end
     total_size = uploaded_file.tell()
     uploaded_file.seek(0)  # Reset to beginning
-    
+
     # Create progress containers
     progress_container = st.container()
-    
+
     with progress_container:
         st.subheader("📤 File Upload Progress")
         progress_bar = st.progress(0)
         status_col1, status_col2 = st.columns(2)
-        
+
         with status_col1:
             size_text = st.empty()
             speed_text = st.empty()
-        
+
         with status_col2:
             percent_text = st.empty()
             eta_text = st.empty()
-    
+
     # Read file in chunks with progress tracking
     chunk_size = 1024 * 1024  # 1MB chunks
     file_bytes = b""
     bytes_read = 0
     start_time = time.time()
-    
+
     while True:
         chunk = uploaded_file.read(chunk_size)
         if not chunk:
             break
-            
+
         file_bytes += chunk
         bytes_read += len(chunk)
-        
+
         # Calculate progress
         progress = bytes_read / total_size
         elapsed_time = time.time() - start_time
-        
+
         # Calculate upload speed and ETA
         if elapsed_time > 0:
             speed_mbps = (bytes_read / (1024 * 1024)) / elapsed_time
             remaining_bytes = total_size - bytes_read
-            eta_seconds = remaining_bytes / (speed_mbps * 1024 * 1024) if speed_mbps > 0 else 0
+            eta_seconds = (
+                remaining_bytes / (speed_mbps * 1024 * 1024) if speed_mbps > 0 else 0
+            )
         else:
             speed_mbps = 0
             eta_seconds = 0
-        
+
         # Update progress display
         progress_bar.progress(progress)
-        
-        size_text.text(f"📊 {bytes_read / (1024*1024):.1f} MB / {total_size / (1024*1024):.1f} MB")
+
+        size_text.text(
+            f"📊 {bytes_read / (1024*1024):.1f} MB / {total_size / (1024*1024):.1f} MB"
+        )
         speed_text.text(f"⚡ Speed: {speed_mbps:.1f} MB/s")
         percent_text.text(f"📈 Progress: {progress * 100:.1f}%")
-        
+
         if eta_seconds > 0:
             eta_text.text(f"⏱️ ETA: {eta_seconds:.1f}s")
         else:
             eta_text.text("⏱️ ETA: Calculating...")
-        
+
         # Small delay to make progress visible for smaller files
         if total_size < 10 * 1024 * 1024:  # Files smaller than 10MB
             time.sleep(0.1)
-    
+
     # Final update
     progress_bar.progress(1.0)
     size_text.text(f"✅ Upload Complete: {total_size / (1024*1024):.1f} MB")
-    speed_text.text(f"⚡ Average Speed: {(total_size / (1024*1024)) / elapsed_time:.1f} MB/s")
+    speed_text.text(
+        f"⚡ Average Speed: {(total_size / (1024*1024)) / elapsed_time:.1f} MB/s"
+    )
     percent_text.text("📈 Progress: 100%")
     eta_text.text("⏱️ Upload Complete!")
-    
+
     # Clear progress after showing completion
     time.sleep(2)
     progress_container.empty()
-    
+
     return file_bytes, get_file_hash(file_bytes)
 
 
@@ -373,7 +379,7 @@ def main():
         # Upload file with progress tracking
         with st.spinner("📤 Preparing upload..."):
             file_bytes, file_hash = upload_file_with_progress(uploaded_file)
-        
+
         if file_bytes is None:
             st.error("❌ Failed to upload file")
             return
@@ -621,45 +627,211 @@ def display_audio_info():
         st.write(f"**Ready for transcription:** ✅")
 
 
+def chunk_audio_file(file_hash, audio_file_path, chunk_size_mb=25):
+    """Split audio file into chunks if it's larger than chunk_size_mb"""
+    try:
+        file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
+
+        if file_size_mb <= chunk_size_mb:
+            # File is small enough, return single chunk
+            return {
+                "success": True,
+                "chunks": [audio_file_path],
+                "chunk_count": 1,
+                "total_size_mb": file_size_mb,
+            }
+
+        # Load audio file for chunking
+        from moviepy import AudioFileClip
+
+        audio = AudioFileClip(audio_file_path)
+        duration = audio.duration
+
+        # Calculate chunk duration (in seconds)
+        chunk_duration = (chunk_size_mb / file_size_mb) * duration
+
+        chunks = []
+        chunk_count = 0
+
+        current_time = 0
+        while current_time < duration:
+            end_time = min(current_time + chunk_duration, duration)
+
+            # Create chunk
+            chunk_audio = audio.subclipped(current_time, end_time)
+
+            # Save chunk to temp file
+            chunk_path = tempfile.mktemp(suffix=f"_chunk_{chunk_count}.wav")
+            chunk_audio.write_audiofile(chunk_path, logger=None)
+
+            chunks.append(chunk_path)
+            chunk_count += 1
+            current_time = end_time
+
+            # Close chunk audio to free memory
+            chunk_audio.close()
+
+        # Close original audio
+        audio.close()
+
+        return {
+            "success": True,
+            "chunks": chunks,
+            "chunk_count": len(chunks),
+            "total_size_mb": file_size_mb,
+            "chunk_duration": chunk_duration,
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e), "chunks": [], "chunk_count": 0}
+
+
+def stream_transcription_chunked(client: AzureOpenAI, chunk_paths, language=None):
+    """Transcribe multiple audio chunks and combine results"""
+    full_transcription = ""
+
+    for i, chunk_path in enumerate(chunk_paths):
+        try:
+            st.info(f"🎙️ Transcribing chunk {i+1}/{len(chunk_paths)}...")
+
+            chunk_transcription = ""
+
+            with open(chunk_path, "rb") as audio_file:
+                stream = client.audio.transcriptions.create(
+                    model="gpt-4o-transcribe",
+                    file=audio_file,
+                    response_format="text",
+                    language=language,
+                    stream=True,
+                )
+
+                for event in stream:
+                    # Handle TranscriptionTextDeltaEvent objects
+                    if hasattr(event, "delta") and event.delta:
+                        chunk_transcription += event.delta
+                        yield f"[Chunk {i+1}/{len(chunk_paths)}] " + full_transcription + chunk_transcription
+                    elif hasattr(event, "text") and event.text:
+                        chunk_transcription += event.text
+                        yield f"[Chunk {i+1}/{len(chunk_paths)}] " + full_transcription + chunk_transcription
+                    elif isinstance(event, str):
+                        chunk_transcription += event
+                        yield f"[Chunk {i+1}/{len(chunk_paths)}] " + full_transcription + chunk_transcription
+
+            # Add chunk transcription to full result
+            if chunk_transcription.strip():
+                if full_transcription and not full_transcription.endswith(" "):
+                    full_transcription += " "
+                full_transcription += chunk_transcription.strip()
+
+            # Clean up chunk file
+            try:
+                os.unlink(chunk_path)
+            except:
+                pass
+
+        except Exception as e:
+            st.error(f"Error transcribing chunk {i+1}: {str(e)}")
+            yield f"Error in chunk {i+1}: {str(e)}"
+
+    # Final result
+    yield full_transcription
+
+
 def start_transcription(transcription_language, client):
-    """Start the transcription process with real streaming"""
+    """Start the transcription process with chunking support"""
     if not st.session_state.processed_audio_path:
         st.error("❌ No audio file available for transcription")
         return
 
-    # Create container for real-time updates
-    transcription_container = st.container()
-
-    with transcription_container:
-        st.subheader("📝 Live Transcription")
-        transcription_placeholder = st.empty()
-
     try:
-        # Start real streaming transcription
-        st.info("🎙️ Starting live transcription...")
+        # Check if audio file needs chunking
+        audio_file_path = st.session_state.processed_audio_path
+        file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
 
-        full_transcription = ""
+        st.info(f"📊 Audio file size: {file_size_mb:.1f} MB")
 
-        # Real streaming from OpenAI API
-        for chunk in stream_transcription_real(
-            client, st.session_state.processed_audio_path, transcription_language
-        ):
-            if chunk and not chunk.startswith("Error:"):
-                full_transcription += chunk
+        if file_size_mb > 25:
+            st.warning("⚠️ Large file detected - chunking required for transcription")
 
-                # Update the display in real-time
-                transcription_placeholder.text_area(
-                    "Live Transcription Stream",
-                    value=full_transcription,
-                    height=200,
-                    key=f"live_transcription_{len(full_transcription)}",
+            # Create chunking progress
+            with st.spinner("✂️ Splitting audio file into chunks..."):
+                chunk_result = chunk_audio_file(
+                    st.session_state.current_file_hash, audio_file_path
                 )
 
-                # Small delay to make streaming visible
-                time.sleep(0.01)
-            elif chunk and chunk.startswith("Error:"):
-                st.error(chunk)
+            if not chunk_result["success"]:
+                st.error(
+                    f"❌ Failed to chunk audio file: {chunk_result.get('error', 'Unknown error')}"
+                )
                 return
+
+            st.success(f"✅ Audio split into {chunk_result['chunk_count']} chunks")
+
+            # Create container for real-time updates
+            transcription_container = st.container()
+
+            with transcription_container:
+                st.subheader("📝 Live Transcription (Chunked)")
+                transcription_placeholder = st.empty()
+
+            st.info("🎙️ Starting chunked transcription...")
+
+            full_transcription = ""
+
+            # Process chunks with streaming
+            for chunk_text in stream_transcription_chunked(
+                client, chunk_result["chunks"], transcription_language
+            ):
+                if chunk_text and not chunk_text.startswith("Error"):
+                    full_transcription = chunk_text
+
+                    # Update the display in real-time
+                    transcription_placeholder.text_area(
+                        "Live Transcription Stream (Chunked)",
+                        value=full_transcription,
+                        height=200,
+                        key=f"chunked_transcription_{len(full_transcription)}",
+                    )
+
+                    # Small delay to make streaming visible
+                    time.sleep(0.01)
+                elif chunk_text and chunk_text.startswith("Error"):
+                    st.error(chunk_text)
+                    return
+
+        else:
+            # Original single-file transcription
+            # Create container for real-time updates
+            transcription_container = st.container()
+
+            with transcription_container:
+                st.subheader("📝 Live Transcription")
+                transcription_placeholder = st.empty()
+
+            st.info("🎙️ Starting live transcription...")
+
+            full_transcription = ""
+
+            # Real streaming from OpenAI API
+            for chunk in stream_transcription_real(
+                client, st.session_state.processed_audio_path, transcription_language
+            ):
+                if chunk and not chunk.startswith("Error:"):
+                    full_transcription += chunk
+
+                    # Update the display in real-time
+                    transcription_placeholder.text_area(
+                        "Live Transcription Stream",
+                        value=full_transcription,
+                        height=200,
+                        key=f"live_transcription_{len(full_transcription)}",
+                    )
+
+                    # Small delay to make streaming visible
+                    time.sleep(0.01)
+                elif chunk and chunk.startswith("Error:"):
+                    st.error(chunk)
+                    return
 
         # Store transcription results
         st.session_state.transcription_text = full_transcription

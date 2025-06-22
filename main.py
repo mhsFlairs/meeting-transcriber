@@ -1,8 +1,6 @@
 import os
 import tempfile
 import logging
-from moviepy import VideoFileClip
-from pydub import AudioSegment
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

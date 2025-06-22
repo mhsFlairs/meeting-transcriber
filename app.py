@@ -2,10 +2,17 @@ import streamlit as st
 import tempfile
 import os
 import hashlib
-from openai import OpenAI
+from openai import AzureOpenAI
 from moviepy import VideoFileClip
 from pathlib import Path
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+
+# Load environment variables
+load_dotenv(override=True)
+
 
 # Initialize session state
 if "processed_audio_path" not in st.session_state:
@@ -28,8 +35,16 @@ if "translation_text" not in st.session_state:
 
 # Initialize OpenAI client
 @st.cache_resource
-def get_openai_client():
-    return OpenAI()
+def get_openai_client(api_version) -> AzureOpenAI:
+    print(f"AZURE_OPENAI_ENDPOINT: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
+    print(f"AZURE_OPENAI_API_KEY: {os.getenv('AZURE_OPENAI_API_KEY')}")
+    print(f"API Version: {api_version}")
+    client = AzureOpenAI(
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=api_version,
+    )
+    return client
 
 
 def get_file_hash(file_bytes):
@@ -116,7 +131,7 @@ def convert_video_to_audio_cached(file_hash, temp_video_path):
         }
 
 
-def stream_transcription_real(client, audio_file_path, language=None):
+def stream_transcription_real(client: AzureOpenAI, audio_file_path, language=None):
     """Real streaming transcription using gpt-4o-mini-transcribe"""
     try:
         with open(audio_file_path, "rb") as audio_file:
@@ -131,9 +146,9 @@ def stream_transcription_real(client, audio_file_path, language=None):
             for event in stream:
                 print(f"Event {event}")  # Debugging output
                 # Handle TranscriptionTextDeltaEvent objects
-                if hasattr(event, 'delta') and event.delta:
+                if hasattr(event, "delta") and event.delta:
                     yield event.delta
-                elif hasattr(event, 'text') and event.text:
+                elif hasattr(event, "text") and event.text:
                     yield event.text
                 elif isinstance(event, str):
                     yield event
@@ -145,29 +160,13 @@ def stream_transcription_real(client, audio_file_path, language=None):
 
 
 @st.cache_data(show_spinner=False)
-def transcribe_audio_cached(file_hash, audio_path, language=None):
-    """Transcribe audio file - cached based on file hash and language"""
-    try:
-        client = get_openai_client()
-        with open(audio_path, "rb") as audio_file:
-            response = client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
-                file=audio_file,
-                response_format="text",
-                language=language,
-            )
-        return {"success": True, "text": response, "error": None}
-    except Exception as e:
-        return {"success": False, "text": "", "error": str(e)}
-
-
-@st.cache_data(show_spinner=False)
-def translate_text_cached(text_hash, text, target_language="English"):
+def translate_text_cached(
+    text_hash, text, _client: AzureOpenAI, target_language="English"
+):
     """Translate text - cached based on text hash and target language"""
     try:
-        client = get_openai_client()
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
+        response = _client.chat.completions.create(
+            model="gpt-4.1-nano",
             messages=[
                 {
                     "role": "system",
@@ -260,7 +259,7 @@ def main():
             help="Leave as 'Auto-detect' for automatic language detection",
         )
 
-        enable_translation = st.checkbox("Enable Translation", value=False)
+        enable_translation = st.checkbox("Enable Translation", value=True)
 
         if enable_translation:
             target_language = st.selectbox(
@@ -268,13 +267,6 @@ def main():
                 options=["English", "French", "German", "Spanish"],
                 index=0,
             )
-
-        api_key = st.text_input(
-            "OpenAI API Key", type="password", help="Enter your OpenAI API key"
-        )
-
-        if api_key.strip() == "" or api_key is None:
-            api_key = os.environ.get("OPENAI_API_KEY", "")
 
     st.header("📁 File Upload")
 
@@ -349,44 +341,51 @@ def main():
             # Processing section
             st.header("⚙️ Transcription")
 
-            if api_key:
+            transcription_client = get_openai_client("2025-03-01-preview")
+            if transcription_client:
                 if not st.session_state.transcription_complete:
                     if st.button("🚀 Start Transcription", type="primary"):
-                        start_transcription(transcription_language)
+                        start_transcription(
+                            transcription_language, transcription_client
+                        )
                 else:
                     st.success("✅ Transcription completed!")
-                    
+
                     # Show transcription result
                     st.text_area(
                         "Transcription Result",
                         value=st.session_state.transcription_text,
                         height=200,
-                        key="final_transcription"
+                        key="final_transcription",
                     )
-                    
+
                     # Translation section
                     st.header("🌐 Translation (Optional)")
-                    
+
+                    translation_client = get_openai_client("2024-12-01-preview")
+
                     if enable_translation:
                         if not st.session_state.translation_complete:
                             if st.button("🌐 Start Translation", type="secondary"):
-                                start_translation(target_language)
+                                start_translation(target_language, translation_client)
                         else:
                             st.success("✅ Translation completed!")
                             st.text_area(
                                 f"Translation Result ({target_language})",
                                 value=st.session_state.translation_text,
                                 height=200,
-                                key="final_translation"
+                                key="final_translation",
                             )
                     else:
-                        st.info("💡 Enable translation in the sidebar to translate the transcription")
-                    
+                        st.info(
+                            "💡 Enable translation in the sidebar to translate the transcription"
+                        )
+
                     # Download section
                     st.header("💾 Download Results")
-                    
+
                     col1, col2 = st.columns(2)
-                    
+
                     with col1:
                         st.download_button(
                             label="📄 Download Transcription",
@@ -394,7 +393,7 @@ def main():
                             file_name=f"transcription_{st.session_state.uploaded_file_info['name']}.txt",
                             mime="text/plain",
                         )
-                    
+
                     if st.session_state.translation_complete:
                         with col2:
                             st.download_button(
@@ -538,13 +537,11 @@ def display_audio_info():
         st.write(f"**Ready for transcription:** ✅")
 
 
-def start_transcription(transcription_language):
+def start_transcription(transcription_language, client):
     """Start the transcription process with real streaming"""
     if not st.session_state.processed_audio_path:
         st.error("❌ No audio file available for transcription")
         return
-
-    client = get_openai_client()
 
     # Create container for real-time updates
     transcription_container = st.container()
@@ -556,16 +553,16 @@ def start_transcription(transcription_language):
     try:
         # Start real streaming transcription
         st.info("🎙️ Starting live transcription...")
-        
+
         full_transcription = ""
-        
+
         # Real streaming from OpenAI API
         for chunk in stream_transcription_real(
             client, st.session_state.processed_audio_path, transcription_language
         ):
             if chunk and not chunk.startswith("Error:"):
                 full_transcription += chunk
-                
+
                 # Update the display in real-time
                 transcription_placeholder.text_area(
                     "Live Transcription Stream",
@@ -573,7 +570,7 @@ def start_transcription(transcription_language):
                     height=200,
                     key=f"live_transcription_{len(full_transcription)}",
                 )
-                
+
                 # Small delay to make streaming visible
                 time.sleep(0.01)
             elif chunk and chunk.startswith("Error:"):
@@ -583,9 +580,9 @@ def start_transcription(transcription_language):
         # Store transcription results
         st.session_state.transcription_text = full_transcription
         st.session_state.transcription_complete = True
-        
+
         st.success("✅ Transcription completed!")
-        
+
         # Rerun to show the next steps
         st.rerun()
 
@@ -593,7 +590,7 @@ def start_transcription(transcription_language):
         st.error(f"❌ Error during transcription: {str(e)}")
 
 
-def start_translation(target_language):
+def start_translation(target_language, client):
     """Start the translation process"""
     if not st.session_state.transcription_text:
         st.error("❌ No transcription available for translation")
@@ -603,18 +600,20 @@ def start_translation(target_language):
         st.info(f"🌐 Starting translation to {target_language}...")
 
         # Get cached translation
-        text_hash = hashlib.md5(st.session_state.transcription_text.encode()).hexdigest()
+        text_hash = hashlib.md5(
+            st.session_state.transcription_text.encode()
+        ).hexdigest()
         translation_result = translate_text_cached(
-            text_hash, st.session_state.transcription_text, target_language
+            text_hash, st.session_state.transcription_text, client, target_language
         )
 
         if translation_result["success"]:
             # Store translation results
             st.session_state.translation_text = translation_result["text"]
             st.session_state.translation_complete = True
-            
+
             st.success("✅ Translation completed!")
-            
+
             # Rerun to show the translation result
             st.rerun()
         else:

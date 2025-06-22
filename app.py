@@ -36,9 +36,6 @@ if "translation_text" not in st.session_state:
 # Initialize OpenAI client
 @st.cache_resource
 def get_openai_client(api_version) -> AzureOpenAI:
-    print(f"AZURE_OPENAI_ENDPOINT: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
-    print(f"AZURE_OPENAI_API_KEY: {os.getenv('AZURE_OPENAI_API_KEY')}")
-    print(f"API Version: {api_version}")
     client = AzureOpenAI(
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -136,7 +133,7 @@ def stream_transcription_real(client: AzureOpenAI, audio_file_path, language=Non
     try:
         with open(audio_file_path, "rb") as audio_file:
             stream = client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
+                model="gpt-4o-transcribe",
                 file=audio_file,
                 response_format="text",
                 language=language,

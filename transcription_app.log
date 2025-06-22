@@ -212,3 +212,181 @@
 2025-06-22 18:50:31,701 - __main__ - INFO - Starting file upload: AIMY phone, what's next-20250620_202448-Meeting Recording.mp4
 2025-06-22 18:50:31,701 - __main__ - INFO - File size: 82.07MB
 2025-06-22 18:50:33,107 - __main__ - INFO - File upload completed: AIMY phone, what's next-20250620_202448-Meeting Recording.mp4, 82.07MB in 1.40s
+2025-06-22 23:21:28,125 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:21:28,137 - __main__ - INFO - Starting main application
+2025-06-22 23:21:39,811 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:21:39,827 - __main__ - INFO - Starting main application
+2025-06-22 23:21:39,946 - __main__ - INFO - Starting file upload: AIMY phone, what's next-20250620_195742-Meeting Recording.mp4
+2025-06-22 23:21:39,947 - __main__ - INFO - File size: 158.78MB
+2025-06-22 23:21:46,404 - __main__ - INFO - File upload completed: AIMY phone, what's next-20250620_195742-Meeting Recording.mp4, 158.78MB in 6.44s
+2025-06-22 23:21:48,935 - __main__ - INFO - Analyzing file: AIMY phone, what's next-20250620_195742-Meeting Recording.mp4 (hash: 721bdad0...)
+2025-06-22 23:21:49,268 - __main__ - INFO - File info extracted: 158.78MB, format: .mp4, is_video: True
+2025-06-22 23:21:49,909 - __main__ - INFO - Video metadata extracted: duration=1296.38s, resolution=1920x1080, has_audio=True
+2025-06-22 23:21:50,067 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:21:50,082 - __main__ - INFO - Starting main application
+2025-06-22 23:21:50,191 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:21:50,198 - __main__ - INFO - Starting main application
+2025-06-22 23:22:03,018 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:22:03,031 - __main__ - INFO - Starting main application
+2025-06-22 23:22:03,061 - __main__ - INFO - Starting video conversion for: AIMY phone, what's next-20250620_195742-Meeting Recording.mp4
+2025-06-22 23:22:03,062 - __main__ - INFO - Estimated conversion time: 2.2 minutes
+2025-06-22 23:22:03,069 - __main__ - INFO - Starting video to audio conversion for file hash: 721bdad0...
+2025-06-22 23:22:03,658 - __main__ - INFO - Extracting audio to: C:\Users\MOHAME~1.SHO\AppData\Local\Temp\tmpkj4gm4cz.mp3
+2025-06-22 23:22:32,452 - __main__ - INFO - Audio extraction completed successfully: 19.8MB
+2025-06-22 23:22:32,455 - __main__ - INFO - Video to audio conversion completed successfully
+2025-06-22 23:22:33,522 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:22:33,537 - __main__ - INFO - Starting main application
+2025-06-22 23:22:39,845 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:22:39,856 - __main__ - INFO - Starting main application
+2025-06-22 23:22:39,894 - __main__ - INFO - Starting transcription process, language: None
+2025-06-22 23:22:39,895 - __main__ - INFO - Audio file size for transcription: 19.8MB
+2025-06-22 23:22:39,896 - __main__ - INFO - Starting single-file transcription
+2025-06-22 23:22:39,900 - __main__ - INFO - Starting real-time transcription for: C:\Users\MOHAME~1.SHO\AppData\Local\Temp\tmpkj4gm4cz.mp3, language: None
+2025-06-22 23:23:16,271 - httpx - INFO - HTTP Request: POST https://fsp-azureai-2.openai.azure.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions?api-version=2025-03-01-preview "HTTP/1.1 200 OK"
+2025-06-22 23:23:16,291 - __main__ - INFO - Transcription completed successfully, length: 5434 chars
+2025-06-22 23:23:17,374 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:23:17,383 - __main__ - INFO - Starting main application
+2025-06-22 23:23:29,303 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:23:29,318 - __main__ - INFO - Starting main application
+2025-06-22 23:23:29,366 - __main__ - INFO - Starting translation to English
+2025-06-22 23:23:29,378 - __main__ - INFO - Starting translation to English for text hash: 1e15613e...
+2025-06-22 23:23:38,668 - httpx - INFO - HTTP Request: POST https://fsp-azureai-2.openai.azure.com/openai/deployments/gpt-4.1-nano/chat/completions?api-version=2024-12-01-preview "HTTP/1.1 200 OK"
+2025-06-22 23:23:38,675 - __main__ - INFO - Translation to English completed successfully
+2025-06-22 23:23:38,677 - __main__ - INFO - Translation to English completed successfully
+2025-06-22 23:23:39,744 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:23:39,761 - __main__ - INFO - Starting main application
+2025-06-22 23:24:12,852 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:24:12,873 - __main__ - INFO - Starting main application
+2025-06-22 23:24:17,253 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:24:17,286 - __main__ - INFO - Starting main application
+2025-06-22 23:24:32,092 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:24:32,108 - __main__ - INFO - Starting main application
+2025-06-22 23:24:32,238 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:24:32,252 - __main__ - INFO - Starting main application
+2025-06-22 23:27:23,801 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:27:23,820 - __main__ - INFO - Starting main application
+2025-06-22 23:27:36,463 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:27:36,476 - __main__ - INFO - Starting main application
+2025-06-22 23:27:44,445 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:27:44,456 - __main__ - INFO - Starting main application
+2025-06-22 23:27:49,875 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:27:49,890 - __main__ - INFO - Starting main application
+2025-06-22 23:27:56,130 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:27:56,140 - __main__ - INFO - Starting main application
+2025-06-22 23:27:56,154 - __main__ - INFO - Starting file upload: test2.mp4
+2025-06-22 23:27:56,155 - __main__ - INFO - File size: 5.64MB
+2025-06-22 23:27:56,803 - __main__ - INFO - File upload completed: test2.mp4, 5.64MB in 0.53s
+2025-06-22 23:27:58,829 - __main__ - INFO - Analyzing file: test2.mp4 (hash: 45cdcc8a...)
+2025-06-22 23:27:58,837 - __main__ - INFO - File info extracted: 5.64MB, format: .mp4, is_video: True
+2025-06-22 23:27:59,337 - __main__ - INFO - Video metadata extracted: duration=10.0s, resolution=1280x720, has_audio=True
+2025-06-22 23:27:59,446 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:27:59,454 - __main__ - INFO - Starting main application
+2025-06-22 23:27:59,547 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:27:59,555 - __main__ - INFO - Starting main application
+2025-06-22 23:28:01,322 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:01,332 - __main__ - INFO - Starting main application
+2025-06-22 23:28:01,353 - __main__ - INFO - Starting video conversion for: test2.mp4
+2025-06-22 23:28:01,354 - __main__ - INFO - Estimated conversion time: 0.0 minutes
+2025-06-22 23:28:01,359 - __main__ - INFO - Starting video to audio conversion for file hash: 45cdcc8a...
+2025-06-22 23:28:01,870 - __main__ - INFO - Extracting audio to: C:\Users\MOHAME~1.SHO\AppData\Local\Temp\tmpl3pztat0.mp3
+2025-06-22 23:28:02,228 - __main__ - INFO - Audio extraction completed successfully: 0.2MB
+2025-06-22 23:28:02,231 - __main__ - INFO - Video to audio conversion completed successfully
+2025-06-22 23:28:03,303 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:03,311 - __main__ - INFO - Starting main application
+2025-06-22 23:28:05,547 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:05,559 - __main__ - INFO - Starting main application
+2025-06-22 23:28:05,586 - __main__ - INFO - Starting transcription process, language: None
+2025-06-22 23:28:05,587 - __main__ - INFO - Audio file size for transcription: 0.2MB
+2025-06-22 23:28:05,588 - __main__ - INFO - Starting single-file transcription
+2025-06-22 23:28:05,592 - __main__ - INFO - Starting real-time transcription for: C:\Users\MOHAME~1.SHO\AppData\Local\Temp\tmpl3pztat0.mp3, language: None
+2025-06-22 23:28:08,201 - httpx - INFO - HTTP Request: POST https://fsp-azureai-2.openai.azure.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions?api-version=2025-03-01-preview "HTTP/1.1 200 OK"
+2025-06-22 23:28:08,217 - __main__ - INFO - Transcription completed successfully, length: 188 chars
+2025-06-22 23:28:09,276 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:09,292 - __main__ - INFO - Starting main application
+2025-06-22 23:28:12,401 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:12,414 - __main__ - INFO - Starting main application
+2025-06-22 23:28:12,446 - __main__ - INFO - Starting translation to English
+2025-06-22 23:28:12,448 - __main__ - INFO - Starting translation to English for text hash: f72b3b55...
+2025-06-22 23:28:13,672 - httpx - INFO - HTTP Request: POST https://fsp-azureai-2.openai.azure.com/openai/deployments/gpt-4.1-nano/chat/completions?api-version=2024-12-01-preview "HTTP/1.1 200 OK"
+2025-06-22 23:28:13,674 - __main__ - INFO - Translation to English completed successfully
+2025-06-22 23:28:13,676 - __main__ - INFO - Translation to English completed successfully
+2025-06-22 23:28:14,741 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:14,749 - __main__ - INFO - Starting main application
+2025-06-22 23:28:22,871 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:22,885 - __main__ - INFO - Starting main application
+2025-06-22 23:28:22,982 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:22,997 - __main__ - INFO - Starting main application
+2025-06-22 23:28:25,141 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:25,153 - __main__ - INFO - Starting main application
+2025-06-22 23:28:25,260 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:25,276 - __main__ - INFO - Starting main application
+2025-06-22 23:28:26,257 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:26,266 - __main__ - INFO - Starting main application
+2025-06-22 23:28:26,362 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:28:26,374 - __main__ - INFO - Starting main application
+2025-06-22 23:29:23,392 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:23,407 - __main__ - INFO - Starting main application
+2025-06-22 23:29:23,561 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:23,579 - __main__ - INFO - Starting main application
+2025-06-22 23:29:27,885 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:27,899 - __main__ - INFO - Starting main application
+2025-06-22 23:29:28,012 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:28,026 - __main__ - INFO - Starting main application
+2025-06-22 23:29:38,099 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:38,109 - __main__ - INFO - Starting main application
+2025-06-22 23:29:43,549 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:43,561 - __main__ - INFO - Starting main application
+2025-06-22 23:29:45,783 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:45,801 - __main__ - INFO - Starting main application
+2025-06-22 23:29:45,925 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:45,941 - __main__ - INFO - Starting main application
+2025-06-22 23:29:47,224 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:47,237 - __main__ - INFO - Starting main application
+2025-06-22 23:29:47,341 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:29:47,348 - __main__ - INFO - Starting main application
+2025-06-22 23:30:04,993 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:30:05,004 - __main__ - INFO - Starting main application
+2025-06-22 23:30:09,026 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:30:09,046 - __main__ - INFO - Starting main application
+2025-06-22 23:30:09,173 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:30:09,180 - __main__ - INFO - Starting main application
+2025-06-22 23:30:56,561 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:30:56,569 - __main__ - INFO - Starting main application
+2025-06-22 23:31:01,924 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:01,945 - __main__ - INFO - Starting main application
+2025-06-22 23:31:09,005 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:09,026 - __main__ - INFO - Starting main application
+2025-06-22 23:31:09,044 - __main__ - INFO - Starting file upload: test2.mp4
+2025-06-22 23:31:09,045 - __main__ - INFO - File size: 5.64MB
+2025-06-22 23:31:09,697 - __main__ - INFO - File upload completed: test2.mp4, 5.64MB in 0.54s
+2025-06-22 23:31:11,809 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:11,819 - __main__ - INFO - Starting main application
+2025-06-22 23:31:11,926 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:11,940 - __main__ - INFO - Starting main application
+2025-06-22 23:31:13,600 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:13,611 - __main__ - INFO - Starting main application
+2025-06-22 23:31:13,638 - __main__ - INFO - Starting video conversion for: test2.mp4
+2025-06-22 23:31:13,639 - __main__ - INFO - Estimated conversion time: 0.0 minutes
+2025-06-22 23:31:13,642 - __main__ - INFO - Video to audio conversion completed successfully
+2025-06-22 23:31:14,704 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:14,709 - __main__ - INFO - Starting main application
+2025-06-22 23:31:16,749 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:16,758 - __main__ - INFO - Starting main application
+2025-06-22 23:31:16,789 - __main__ - INFO - Starting transcription process, language: None
+2025-06-22 23:31:16,790 - __main__ - INFO - Audio file size for transcription: 0.2MB
+2025-06-22 23:31:16,792 - __main__ - INFO - Starting single-file transcription
+2025-06-22 23:31:16,796 - __main__ - INFO - Starting real-time transcription for: C:\Users\MOHAME~1.SHO\AppData\Local\Temp\tmpl3pztat0.mp3, language: None
+2025-06-22 23:31:20,853 - httpx - INFO - HTTP Request: POST https://fsp-azureai-2.openai.azure.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions?api-version=2025-03-01-preview "HTTP/1.1 200 OK"
+2025-06-22 23:31:20,867 - __main__ - INFO - Transcription completed successfully, length: 188 chars
+2025-06-22 23:31:21,935 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:21,955 - __main__ - INFO - Starting main application
+2025-06-22 23:31:23,310 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:23,322 - __main__ - INFO - Starting main application
+2025-06-22 23:31:23,348 - __main__ - INFO - Starting translation to English
+2025-06-22 23:31:23,351 - __main__ - INFO - Translation to English completed successfully
+2025-06-22 23:31:24,412 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:24,425 - __main__ - INFO - Starting main application
+2025-06-22 23:31:26,011 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:26,024 - __main__ - INFO - Starting main application
+2025-06-22 23:31:26,129 - __main__ - INFO - Application started - environment variables loaded
+2025-06-22 23:31:26,143 - __main__ - INFO - Starting main application

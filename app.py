@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 from pydub import AudioSegment
 from dotenv import load_dotenv
+from enum import Enum
 
 # Configure logging
 logging.basicConfig(
@@ -18,30 +19,136 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables from .env file if it exists
 
-# Load environment variables
+# Define application states
+class AppState(Enum):
+    UPLOAD = "upload"
+    ANALYZE = "analyze"
+    CONVERT = "convert"
+    TRANSCRIBE = "transcribe"
+    TRANSLATE = "translate"
+    COMPLETE = "complete"
+
+
+# Load environment variables from .env file if it exists
 load_dotenv(override=True)
 logger.info("Application started - environment variables loaded")
 
 
-# Initialize session state
-if "processed_audio_path" not in st.session_state:
-    st.session_state.processed_audio_path = None
-if "current_file_hash" not in st.session_state:
-    st.session_state.current_file_hash = None
-if "conversion_complete" not in st.session_state:
+def initialize_session_state():
+    """Initialize all session state variables"""
+    if "current_state" not in st.session_state:
+        st.session_state.current_state = AppState.UPLOAD.value
+    if "processed_audio_path" not in st.session_state:
+        st.session_state.processed_audio_path = None
+    if "current_file_hash" not in st.session_state:
+        st.session_state.current_file_hash = None
+    if "conversion_complete" not in st.session_state:
+        st.session_state.conversion_complete = False
+    if "uploaded_file_info" not in st.session_state:
+        st.session_state.uploaded_file_info = None
+    if "transcription_complete" not in st.session_state:
+        st.session_state.transcription_complete = False
+    if "transcription_text" not in st.session_state:
+        st.session_state.transcription_text = ""
+    if "translation_complete" not in st.session_state:
+        st.session_state.translation_complete = False
+    if "translation_text" not in st.session_state:
+        st.session_state.translation_text = ""
+    if "audio_file_info" not in st.session_state:
+        st.session_state.audio_file_info = None
+
+
+def reset_processing_state():
+    """Reset processing state when new file is uploaded"""
+    st.session_state.current_state = AppState.ANALYZE.value
     st.session_state.conversion_complete = False
-if "uploaded_file_info" not in st.session_state:
-    st.session_state.uploaded_file_info = None
-if "transcription_complete" not in st.session_state:
+    st.session_state.processed_audio_path = None
     st.session_state.transcription_complete = False
-if "transcription_text" not in st.session_state:
     st.session_state.transcription_text = ""
-if "translation_complete" not in st.session_state:
     st.session_state.translation_complete = False
-if "translation_text" not in st.session_state:
     st.session_state.translation_text = ""
+    st.session_state.audio_file_info = None
+
+
+def can_convert() -> bool:
+    """Check if conversion step can be performed"""
+    return (
+        st.session_state.uploaded_file_info is not None
+        and not st.session_state.conversion_complete
+    )
+
+
+def can_transcribe() -> bool:
+    """Check if transcription step can be performed"""
+    return (
+        st.session_state.conversion_complete
+        and st.session_state.processed_audio_path is not None
+        and not st.session_state.transcription_complete
+    )
+
+
+def can_translate() -> bool:
+    """Check if translation step can be performed"""
+    return (
+        st.session_state.transcription_complete
+        and st.session_state.transcription_text
+        and not st.session_state.translation_complete
+    )
+
+
+def is_complete() -> bool:
+    """Check if all processing is complete"""
+    return st.session_state.transcription_complete
+
+
+def show_progress_indicator():
+    """Show progress indicator for current state"""
+    states = [
+        ("📁", "Upload", AppState.UPLOAD.value),
+        ("📊", "Analyze", AppState.ANALYZE.value),
+        ("🔄", "Convert", AppState.CONVERT.value),
+        ("🎙️", "Transcribe", AppState.TRANSCRIBE.value),
+        ("🌐", "Translate", AppState.TRANSLATE.value),
+        ("✅", "Complete", AppState.COMPLETE.value),
+    ]
+
+    # Create progress bar
+    current_index = next(
+        (
+            i
+            for i, (_, _, state) in enumerate(states)
+            if state == st.session_state.current_state
+        ),
+        0,
+    )
+
+    st.progress((current_index + 1) / len(states))
+
+    # Create visual progress indicators
+    cols = st.columns(len(states))
+    for i, (icon, label, state) in enumerate(states):
+        with cols[i]:
+            if state == st.session_state.current_state:
+                st.markdown(f"**{icon} {label}** 🔄")
+            elif (
+                i < current_index
+                or (
+                    state == AppState.CONVERT.value
+                    and st.session_state.conversion_complete
+                )
+                or (
+                    state == AppState.TRANSCRIBE.value
+                    and st.session_state.transcription_complete
+                )
+                or (
+                    state == AppState.TRANSLATE.value
+                    and st.session_state.translation_complete
+                )
+            ):
+                st.markdown(f"✅ {label}")
+            else:
+                st.markdown(f"⏳ {label}")
 
 
 # Initialize OpenAI client
@@ -235,46 +342,6 @@ def is_audio_file(filename):
     return Path(filename).suffix.lower() in audio_extensions
 
 
-def stream_transcription(text, placeholder, label="Live Transcription"):
-    """Simulate streaming text for better UX"""
-    words = text.split()
-    displayed_text = ""
-
-    for i, word in enumerate(words):
-        if i == 0:
-            displayed_text = word
-        else:
-            displayed_text += " " + word
-
-        placeholder.text_area(
-            label,
-            value=displayed_text,
-            height=200,
-            key=f"{label.lower().replace(' ', '_')}_{i}",
-        )
-        time.sleep(0.05)  # Small delay for streaming effect
-
-
-def stream_translation(text, placeholder, target_language):
-    """Simulate streaming translation for better UX"""
-    words = text.split()
-    displayed_text = ""
-
-    for i, word in enumerate(words):
-        if i == 0:
-            displayed_text = word
-        else:
-            displayed_text += " " + word
-
-        placeholder.text_area(
-            f"Live Translation ({target_language})",
-            value=displayed_text,
-            height=200,
-            key=f"translation_{target_language.lower()}_{i}",
-        )
-        time.sleep(0.05)
-
-
 def upload_file_with_progress(uploaded_file):
     """Upload file with real-time progress tracking"""
     if not uploaded_file:
@@ -372,38 +439,14 @@ def upload_file_with_progress(uploaded_file):
     return file_bytes, get_file_hash(file_bytes)
 
 
-def main():
-    st.set_page_config(
-        page_title="Audio/Video Transcription & Translation",
-        page_icon="🎵",
-        layout="wide",
-    )
+def show_completed_section(title, icon, content_func, key_prefix):
+    """Show a completed section in collapsed state"""
+    with st.expander(f"✅ {title} (Completed)", expanded=False):
+        content_func()
 
-    st.title("🎵 Audio/Video Transcription & Translation")
-    st.markdown(
-        "Upload audio or video files for real-time transcription and translation"
-    )
 
-    # Sidebar for settings
-    with st.sidebar:
-        st.header("Settings")
-
-        transcription_language = st.selectbox(
-            "Transcription Language (optional)",
-            options=[None, "en", "ar", "fr"],
-            format_func=lambda x: "Auto-detect" if x is None else x,
-            help="Leave as 'Auto-detect' for automatic language detection",
-        )
-
-        enable_translation = st.checkbox("Enable Translation", value=True)
-
-        if enable_translation:
-            target_language = st.selectbox(
-                "Target Language",
-                options=["English", "French", "German", "Spanish"],
-                index=0,
-            )
-
+def show_upload_section():
+    """Handle file upload section"""
     st.header("📁 File Upload")
 
     uploaded_file = st.file_uploader(
@@ -436,13 +479,8 @@ def main():
 
         # Reset processing state when new file is uploaded
         if st.session_state.current_file_hash != file_hash:
-            st.session_state.conversion_complete = False
-            st.session_state.processed_audio_path = None
             st.session_state.current_file_hash = file_hash
-            st.session_state.transcription_complete = False
-            st.session_state.transcription_text = ""
-            st.session_state.translation_complete = False
-            st.session_state.translation_text = ""
+            reset_processing_state()
 
         st.success(f"✅ File uploaded: {uploaded_file.name}")
 
@@ -451,102 +489,335 @@ def main():
             file_info = get_file_info(file_bytes, uploaded_file.name, file_hash)
             st.session_state.uploaded_file_info = file_info
 
-        # Display file information
-        display_file_info(file_info)
+        # Move to analyze state
+        st.session_state.current_state = AppState.ANALYZE.value
+        st.rerun()
 
-        # Conversion section
-        st.header("🔄 File Conversion")
+    elif not uploaded_file and st.session_state.current_state != AppState.UPLOAD.value:
+        st.info("👆 Please upload a file to begin")
 
-        if file_info["is_video"] and not st.session_state.conversion_complete:
-            st.info(
-                "🎬 Video file detected - conversion to audio required for transcription"
+
+def show_analyze_section():
+    """Handle file analysis section"""
+    if st.session_state.uploaded_file_info is None:
+        st.session_state.current_state = AppState.UPLOAD.value
+        st.rerun()
+        return
+
+    st.header("📊 File Analysis")
+    display_file_info(st.session_state.uploaded_file_info)
+
+    # Move to convert state
+    st.session_state.current_state = AppState.CONVERT.value
+    st.rerun()
+
+
+def show_convert_section():
+    """Handle file conversion section"""
+    if not can_convert():
+        if st.session_state.conversion_complete:
+            st.session_state.current_state = AppState.TRANSCRIBE.value
+            st.rerun()
+        return
+
+    st.header("🔄 File Conversion")
+    file_info = st.session_state.uploaded_file_info
+
+    if file_info["is_video"] and not st.session_state.conversion_complete:
+        st.info(
+            "🎬 Video file detected - conversion to audio required for transcription"
+        )
+
+        if st.button("🔄 Convert Video to Audio", type="primary"):
+            convert_video_file(file_info)
+
+    elif file_info["is_audio"] and not st.session_state.conversion_complete:
+        st.info("🎵 Audio file detected - preparing for transcription")
+
+        if st.button("📋 Prepare Audio File", type="primary"):
+            prepare_audio_file(file_info)
+
+
+def show_transcribe_section():
+    """Handle transcription section"""
+    if not can_transcribe():
+        return
+
+    st.header("🎙️ Transcription")
+
+    # Show audio file information if available
+    if st.session_state.audio_file_info:
+        display_audio_info()
+
+    transcription_client = get_openai_client("2025-03-01-preview")
+    if transcription_client:
+        if not st.session_state.transcription_complete:
+            # Get transcription language from sidebar
+            transcription_language = st.session_state.get(
+                "transcription_language", None
             )
 
-            if st.button("🔄 Convert Video to Audio", type="primary"):
-                convert_video_file(file_info)
+            if st.button("🚀 Start Transcription", type="primary"):
+                start_transcription(transcription_language, transcription_client)
+        else:
+            st.success("✅ Transcription completed!")
+            st.text_area(
+                "Transcription Result",
+                value=st.session_state.transcription_text,
+                height=200,
+                key="final_transcription",
+            )
+            # Move to translation state
+            st.session_state.current_state = AppState.TRANSLATE.value
+            st.rerun()
+    else:
+        st.warning("⚠️ Please configure your OpenAI API credentials")
 
-        elif file_info["is_audio"] and not st.session_state.conversion_complete:
-            st.info("🎵 Audio file detected - preparing for transcription")
 
-            if st.button("📋 Prepare Audio File", type="primary"):
-                prepare_audio_file(file_info)
+def show_translate_section():
+    """Handle translation section"""
+    if not can_translate():
+        if st.session_state.translation_complete or not st.session_state.get(
+            "enable_translation", True
+        ):
+            st.session_state.current_state = AppState.COMPLETE.value
+            st.rerun()
+        return
 
-        elif st.session_state.conversion_complete:
-            st.success("✅ File conversion completed!")
+    st.header("🌐 Translation")
 
-            # Show audio file information
-            if hasattr(st.session_state, "audio_file_info"):
-                display_audio_info()
+    enable_translation = st.session_state.get("enable_translation", True)
 
-            # Processing section
-            st.header("⚙️ Transcription")
+    if enable_translation and not st.session_state.translation_complete:
+        target_language = st.session_state.get("target_language", "English")
+        translation_client = get_openai_client("2024-12-01-preview")
 
-            transcription_client = get_openai_client("2025-03-01-preview")
-            if transcription_client:
-                if not st.session_state.transcription_complete:
-                    if st.button("🚀 Start Transcription", type="primary"):
-                        start_transcription(
-                            transcription_language, transcription_client
-                        )
-                else:
-                    st.success("✅ Transcription completed!")
+        if st.button("🌐 Start Translation", type="secondary"):
+            start_translation(target_language, translation_client)
+    elif st.session_state.translation_complete:
+        st.success("✅ Translation completed!")
+        target_language = st.session_state.get("target_language", "English")
+        st.text_area(
+            f"Translation Result ({target_language})",
+            value=st.session_state.translation_text,
+            height=200,
+            key="final_translation",
+        )
+        # Move to complete state
+        st.session_state.current_state = AppState.COMPLETE.value
+        st.rerun()
+    else:
+        st.info(
+            "💡 Translation disabled - enable in sidebar to translate the transcription"
+        )
+        # Skip to complete state
+        st.session_state.current_state = AppState.COMPLETE.value
+        st.rerun()
 
-                    # Show transcription result
-                    st.text_area(
-                        "Transcription Result",
-                        value=st.session_state.transcription_text,
-                        height=200,
-                        key="final_transcription",
-                    )
 
-                    # Translation section
-                    st.header("🌐 Translation (Optional)")
+def show_complete_section():
+    """Handle completion section with downloads"""
+    st.header("✅ Processing Complete")
 
-                    translation_client = get_openai_client("2024-12-01-preview")
+    # Show completed transcription
+    if st.session_state.transcription_complete:
+        with st.expander("📝 Transcription Result", expanded=False):
+            st.text_area(
+                "Transcription",
+                value=st.session_state.transcription_text,
+                height=200,
+                key="completed_transcription",
+            )
 
-                    if enable_translation:
-                        if not st.session_state.translation_complete:
-                            if st.button("🌐 Start Translation", type="secondary"):
-                                start_translation(target_language, translation_client)
-                        else:
-                            st.success("✅ Translation completed!")
-                            st.text_area(
-                                f"Translation Result ({target_language})",
-                                value=st.session_state.translation_text,
-                                height=200,
-                                key="final_translation",
-                            )
-                    else:
-                        st.info(
-                            "💡 Enable translation in the sidebar to translate the transcription"
-                        )
+    # Show completed translation if available
+    if st.session_state.translation_complete:
+        target_language = st.session_state.get("target_language", "English")
+        with st.expander(f"🌐 Translation Result ({target_language})", expanded=False):
+            st.text_area(
+                f"Translation ({target_language})",
+                value=st.session_state.translation_text,
+                height=200,
+                key="completed_translation",
+            )
 
-                    # Download section
-                    st.header("💾 Download Results")
+    # Download section
+    st.subheader("💾 Download Results")
 
-                    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-                    with col1:
-                        st.download_button(
-                            label="📄 Download Transcription",
-                            data=st.session_state.transcription_text,
-                            file_name=f"transcription_{st.session_state.uploaded_file_info['name']}.txt",
-                            mime="text/plain",
-                        )
+    with col1:
+        st.download_button(
+            label="📄 Download Transcription",
+            data=st.session_state.transcription_text,
+            file_name=f"transcription_{st.session_state.uploaded_file_info['name']}.txt",
+            mime="text/plain",
+        )
 
-                    if st.session_state.translation_complete:
-                        with col2:
-                            st.download_button(
-                                label="🌐 Download Translation",
-                                data=st.session_state.translation_text,
-                                file_name=f"translation_{st.session_state.uploaded_file_info['name']}.txt",
-                                mime="text/plain",
-                            )
-            else:
-                st.warning("⚠️ Please enter your OpenAI API key in the sidebar")
+    if st.session_state.translation_complete:
+        with col2:
+            st.download_button(
+                label="🌐 Download Translation",
+                data=st.session_state.translation_text,
+                file_name=f"translation_{st.session_state.uploaded_file_info['name']}.txt",
+                mime="text/plain",
+            )
 
-    elif not uploaded_file:
-        st.info("👆 Please upload a file to begin")
+    # Option to start over
+    st.subheader("🔄 Start New Processing")
+    if st.button("📁 Upload New File", type="secondary"):
+        # Reset to upload state
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        initialize_session_state()
+        st.rerun()
+
+
+def main():
+    st.set_page_config(
+        page_title="Audio/Video Transcription & Translation",
+        page_icon="🎵",
+        layout="wide",
+    )
+
+    st.title("🎵 Audio/Video Transcription & Translation")
+    st.markdown(
+        "Upload audio or video files for real-time transcription and translation"
+    )
+
+    # Initialize session state
+    initialize_session_state()
+
+    # Sidebar for settings
+    with st.sidebar:
+        st.header("Settings")
+
+        transcription_language = st.selectbox(
+            "Transcription Language (optional)",
+            options=[None, "en", "ar", "fr"],
+            format_func=lambda x: "Auto-detect" if x is None else x,
+            help="Leave as 'Auto-detect' for automatic language detection",
+        )
+        st.session_state.transcription_language = transcription_language
+
+        enable_translation = st.checkbox("Enable Translation", value=True)
+        st.session_state.enable_translation = enable_translation
+
+        if enable_translation:
+            target_language = st.selectbox(
+                "Target Language",
+                options=["English", "French", "German", "Spanish"],
+                index=0,
+            )
+            st.session_state.target_language = target_language
+
+    # Show progress indicator
+    if st.session_state.current_state != AppState.UPLOAD.value:
+        show_progress_indicator()
+
+    # State machine - show appropriate section based on current state
+    current_state = st.session_state.current_state
+
+    if current_state == AppState.UPLOAD.value:
+        show_upload_section()
+
+    elif current_state == AppState.ANALYZE.value:
+        # Show completed upload section
+        if st.session_state.uploaded_file_info:
+            show_completed_section(
+                "File Upload",
+                "📁",
+                lambda: st.write(
+                    f"**File:** {st.session_state.uploaded_file_info['name']}"
+                ),
+                "upload",
+            )
+        show_analyze_section()
+
+    elif current_state == AppState.CONVERT.value:
+        # Show completed sections
+        if st.session_state.uploaded_file_info:
+            show_completed_section(
+                "File Upload",
+                "📁",
+                lambda: st.write(
+                    f"**File:** {st.session_state.uploaded_file_info['name']}"
+                ),
+                "upload",
+            )
+            show_completed_section(
+                "File Analysis",
+                "📊",
+                lambda: display_file_info(st.session_state.uploaded_file_info),
+                "analyze",
+            )
+        show_convert_section()
+
+    elif current_state == AppState.TRANSCRIBE.value:
+        # Show completed sections
+        if st.session_state.uploaded_file_info:
+            show_completed_section(
+                "File Upload",
+                "📁",
+                lambda: st.write(
+                    f"**File:** {st.session_state.uploaded_file_info['name']}"
+                ),
+                "upload",
+            )
+            show_completed_section(
+                "File Analysis",
+                "📊",
+                lambda: display_file_info(st.session_state.uploaded_file_info),
+                "analyze",
+            )
+        if st.session_state.conversion_complete:
+            show_completed_section(
+                "File Conversion",
+                "🔄",
+                lambda: st.success("✅ File conversion completed!"),
+                "convert",
+            )
+        show_transcribe_section()
+
+    elif current_state == AppState.TRANSLATE.value:
+        # Show completed sections
+        if st.session_state.uploaded_file_info:
+            show_completed_section(
+                "File Upload",
+                "📁",
+                lambda: st.write(
+                    f"**File:** {st.session_state.uploaded_file_info['name']}"
+                ),
+                "upload",
+            )
+            show_completed_section(
+                "File Analysis",
+                "📊",
+                lambda: display_file_info(st.session_state.uploaded_file_info),
+                "analyze",
+            )
+        if st.session_state.conversion_complete:
+            show_completed_section(
+                "File Conversion",
+                "🔄",
+                lambda: st.success("✅ File conversion completed!"),
+                "convert",
+            )
+        if st.session_state.transcription_complete:
+            show_completed_section(
+                "Transcription",
+                "🎙️",
+                lambda: st.text_area(
+                    "Result",
+                    st.session_state.transcription_text,
+                    height=100,
+                    key="collapsed_transcription",
+                ),
+                "transcribe",
+            )
+        show_translate_section()
+
+    elif current_state == AppState.COMPLETE.value:
+        show_complete_section()
 
 
 def display_file_info(file_info):
@@ -635,7 +906,8 @@ def convert_video_file(file_info):
                 progress_bar.empty()
                 status_text.empty()
 
-                # Rerun to update UI
+                # Move to transcribe state
+                st.session_state.current_state = AppState.TRANSCRIBE.value
                 st.rerun()
             else:
                 logger.error(f"Video conversion failed: {conversion_result['message']}")
@@ -667,7 +939,8 @@ def prepare_audio_file(file_info):
         logger.info("Audio file prepared successfully")
         st.success("✅ Audio file prepared for transcription!")
 
-        # Rerun to update UI
+        # Move to transcribe state
+        st.session_state.current_state = AppState.TRANSCRIBE.value
         st.rerun()
 
 
@@ -876,38 +1149,6 @@ def start_transcription(transcription_language, client):
             )
             st.success(f"✅ Audio split into {chunk_result['chunk_count']} chunks")
 
-            # # Create container for real-time updates
-            # transcription_container = st.container()
-
-            # with transcription_container:
-            #     st.subheader("📝 Live Transcription (Chunked)")
-            #     transcription_placeholder = st.empty()
-
-            # st.info("🎙️ Starting chunked transcription...")
-
-            # full_transcription = ""
-
-            # # Process chunks with streaming
-            # for chunk_text in stream_transcription_chunked(
-            #     client, chunk_result["chunks"], transcription_language
-            # ):
-            #     if chunk_text and not chunk_text.startswith("Error"):
-            #         full_transcription = chunk_text
-
-            #         # Update the display in real-time
-            #         transcription_placeholder.text_area(
-            #             "Live Transcription Stream (Chunked)",
-            #             value=full_transcription,
-            #             height=200,
-            #             key=f"chunked_transcription_{len(full_transcription)}",
-            #         )
-
-            #         # Small delay to make streaming visible
-            #         time.sleep(0.01)
-            #     elif chunk_text and chunk_text.startswith("Error"):
-            #         st.error(chunk_text)
-            #         return
-
         else:
             logger.info("Starting single-file transcription")
             # Original single-file transcription
@@ -953,7 +1194,9 @@ def start_transcription(transcription_language, client):
         )
         st.success("✅ Transcription completed!")
 
-        # Rerun to show the next steps
+        # Move to translation state
+        st.session_state.current_state = AppState.TRANSLATE.value
+        time.sleep(1)  # Brief pause to show success message
         st.rerun()
 
     except Exception as e:
@@ -991,7 +1234,9 @@ def start_translation(target_language, client):
             logger.info(f"Translation to {target_language} completed successfully")
             st.success("✅ Translation completed!")
 
-            # Rerun to show the translation result
+            # Move to complete state
+            st.session_state.current_state = AppState.COMPLETE.value
+            time.sleep(1)  # Brief pause to show success message
             st.rerun()
         else:
             error_msg = f"Translation error: {translation_result['error']}"

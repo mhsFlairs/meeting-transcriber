@@ -2,16 +2,27 @@ import streamlit as st
 import tempfile
 import os
 import hashlib
+import logging
 from openai import AzureOpenAI
 from moviepy import VideoFileClip
 from pathlib import Path
 import time
+from pydub import AudioSegment
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("transcription_app.log"), logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file if it exists
 
 # Load environment variables
 load_dotenv(override=True)
+logger.info("Application started - environment variables loaded")
 
 
 # Initialize session state
@@ -52,6 +63,8 @@ def get_file_hash(file_bytes):
 @st.cache_data(show_spinner=False)
 def get_file_info(_file_bytes, filename, file_hash):
     """Get detailed information about the file - cached based on content hash"""
+    logger.info(f"Analyzing file: {filename} (hash: {file_hash[:8]}...)")
+
     # Create temp file from bytes
     with tempfile.NamedTemporaryFile(
         delete=False, suffix=Path(filename).suffix
@@ -70,6 +83,10 @@ def get_file_info(_file_bytes, filename, file_hash):
         "hash": file_hash,
     }
 
+    logger.info(
+        f"File info extracted: {file_info['size_mb']:.2f}MB, format: {file_info['format']}, is_video: {is_video}"
+    )
+
     if is_video:
         try:
             with VideoFileClip(temp_path) as video:
@@ -83,7 +100,11 @@ def get_file_info(_file_bytes, filename, file_hash):
                         "has_audio": video.audio is not None,
                     }
                 )
+                logger.info(
+                    f"Video metadata extracted: duration={video.duration}s, resolution={file_info['resolution']}, has_audio={video.audio is not None}"
+                )
         except Exception as e:
+            logger.error(f"Could not read video metadata for {filename}: {str(e)}")
             st.warning(f"Could not read video metadata: {str(e)}")
 
     return file_info
@@ -92,15 +113,20 @@ def get_file_info(_file_bytes, filename, file_hash):
 @st.cache_data(show_spinner=False)
 def convert_video_to_audio_cached(file_hash, temp_video_path):
     """Convert video file to audio - cached based on file hash"""
+    logger.info(f"Starting video to audio conversion for file hash: {file_hash[:8]}...")
+
     try:
         video = VideoFileClip(temp_video_path)
 
         if video.audio is None:
             video.close()
-            raise ValueError("No audio track found in the video file")
+            error_msg = "No audio track found in the video file"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         # Create temp audio file
-        temp_audio_path = tempfile.mktemp(suffix=".wav")
+        temp_audio_path = tempfile.mktemp(suffix=".mp3")
+        logger.info(f"Extracting audio to: {temp_audio_path}")
 
         # Extract audio
         audio = video.audio
@@ -112,6 +138,7 @@ def convert_video_to_audio_cached(file_hash, temp_video_path):
 
         # Get audio file info
         audio_size = os.path.getsize(temp_audio_path) / (1024 * 1024)
+        logger.info(f"Audio extraction completed successfully: {audio_size:.1f}MB")
 
         return {
             "audio_path": temp_audio_path,
@@ -121,15 +148,21 @@ def convert_video_to_audio_cached(file_hash, temp_video_path):
         }
 
     except Exception as e:
+        error_msg = f"Error extracting audio: {str(e)}"
+        logger.error(error_msg)
         return {
             "audio_path": None,
             "success": False,
-            "message": f"Error extracting audio: {str(e)}",
+            "message": error_msg,
         }
 
 
 def stream_transcription_real(client: AzureOpenAI, audio_file_path, language=None):
     """Real streaming transcription using gpt-4o-mini-transcribe"""
+    logger.info(
+        f"Starting real-time transcription for: {audio_file_path}, language: {language}"
+    )
+
     try:
         with open(audio_file_path, "rb") as audio_file:
             stream = client.audio.transcriptions.create(
@@ -141,7 +174,7 @@ def stream_transcription_real(client: AzureOpenAI, audio_file_path, language=Non
             )
 
             for event in stream:
-                print(f"Event {event}")  # Debugging output
+                logger.debug(f"Transcription event received: {type(event)}")
                 # Handle TranscriptionTextDeltaEvent objects
                 if hasattr(event, "delta") and event.delta:
                     yield event.delta
@@ -152,7 +185,9 @@ def stream_transcription_real(client: AzureOpenAI, audio_file_path, language=Non
                 # Skip events without text content (like done events)
 
     except Exception as e:
-        st.error(f"Transcription error: {str(e)}")
+        error_msg = f"Transcription error: {str(e)}"
+        logger.error(error_msg)
+        st.error(error_msg)
         yield f"Error: {str(e)}"
 
 
@@ -161,23 +196,30 @@ def translate_text_cached(
     text_hash, text, _client: AzureOpenAI, target_language="English"
 ):
     """Translate text - cached based on text hash and target language"""
+    logger.info(
+        f"Starting translation to {target_language} for text hash: {text_hash[:8]}..."
+    )
+
     try:
         response = _client.chat.completions.create(
             model="gpt-4.1-nano",
             messages=[
                 {
                     "role": "system",
-                    "content": f"Translate the following text to {target_language}. Only return the translation, no additional text.",
+                    "content": f"Translate the following text contextually and formatted, it's a transcription of a meeting to {target_language}. Only return the translation, no additional text.",
                 },
                 {"role": "user", "content": text},
             ],
         )
+        logger.info(f"Translation to {target_language} completed successfully")
         return {
             "success": True,
             "text": response.choices[0].message.content,
             "error": None,
         }
     except Exception as e:
+        error_msg = f"Translation error: {str(e)}"
+        logger.error(error_msg)
         return {"success": False, "text": "", "error": str(e)}
 
 
@@ -238,10 +280,14 @@ def upload_file_with_progress(uploaded_file):
     if not uploaded_file:
         return None, None
 
+    logger.info(f"Starting file upload: {uploaded_file.name}")
+
     # Get total file size
     uploaded_file.seek(0, 2)  # Seek to end
     total_size = uploaded_file.tell()
     uploaded_file.seek(0)  # Reset to beginning
+
+    logger.info(f"File size: {total_size / (1024*1024):.2f}MB")
 
     # Create progress containers
     progress_container = st.container()
@@ -314,6 +360,10 @@ def upload_file_with_progress(uploaded_file):
     )
     percent_text.text("📈 Progress: 100%")
     eta_text.text("⏱️ Upload Complete!")
+
+    logger.info(
+        f"File upload completed: {uploaded_file.name}, {total_size / (1024*1024):.2f}MB in {elapsed_time:.2f}s"
+    )
 
     # Clear progress after showing completion
     time.sleep(2)
@@ -526,13 +576,18 @@ def display_file_info(file_info):
 
 def convert_video_file(file_info):
     """Convert video file to audio with progress tracking"""
+    logger.info(f"Starting video conversion for: {file_info['name']}")
+
     if not file_info.get("has_audio", True):
-        st.error("❌ Cannot process video without audio track!")
+        error_msg = "Cannot process video without audio track!"
+        logger.error(error_msg)
+        st.error(f"❌ {error_msg}")
         return
 
     # Show estimated time
     if "duration" in file_info:
         estimated_time = file_info["duration"] / 60 * 0.1
+        logger.info(f"Estimated conversion time: {estimated_time:.1f} minutes")
         st.info(f"⏱️ Estimated conversion time: ~{estimated_time:.1f} minutes")
 
     # Create progress container
@@ -555,6 +610,7 @@ def convert_video_file(file_info):
             status_text.text("🧹 Finalizing...")
 
             if conversion_result["success"]:
+                logger.info("Video to audio conversion completed successfully")
                 # Store processed audio path
                 st.session_state.processed_audio_path = conversion_result["audio_path"]
                 st.session_state.conversion_complete = True
@@ -582,18 +638,23 @@ def convert_video_file(file_info):
                 # Rerun to update UI
                 st.rerun()
             else:
+                logger.error(f"Video conversion failed: {conversion_result['message']}")
                 st.error(conversion_result["message"])
                 progress_bar.empty()
                 status_text.empty()
 
         except Exception as e:
-            st.error(f"❌ Unexpected error: {str(e)}")
+            error_msg = f"Unexpected error during video conversion: {str(e)}"
+            logger.error(error_msg)
+            st.error(f"❌ {error_msg}")
             progress_bar.empty()
             status_text.empty()
 
 
 def prepare_audio_file(file_info):
     """Prepare audio file for transcription"""
+    logger.info(f"Preparing audio file for transcription: {file_info['name']}")
+
     with st.spinner("📋 Preparing audio file..."):
         # For audio files, we just use the uploaded file directly
         st.session_state.processed_audio_path = file_info["temp_path"]
@@ -603,6 +664,7 @@ def prepare_audio_file(file_info):
         st.session_state.audio_file_info = file_info.copy()
 
         time.sleep(0.5)  # Brief pause for user feedback
+        logger.info("Audio file prepared successfully")
         st.success("✅ Audio file prepared for transcription!")
 
         # Rerun to update UI
@@ -629,10 +691,16 @@ def display_audio_info():
 
 def chunk_audio_file(file_hash, audio_file_path, chunk_size_mb=25):
     """Split audio file into chunks if it's larger than chunk_size_mb"""
+    logger.info(
+        f"Starting audio chunking for file hash: {file_hash[:8]}..., chunk size: {chunk_size_mb}MB"
+    )
+
     try:
         file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
+        logger.info(f"Audio file size: {file_size_mb:.2f}MB")
 
         if file_size_mb <= chunk_size_mb:
+            logger.info("File size within limit, no chunking needed")
             # File is small enough, return single chunk
             return {
                 "success": True,
@@ -641,14 +709,16 @@ def chunk_audio_file(file_hash, audio_file_path, chunk_size_mb=25):
                 "total_size_mb": file_size_mb,
             }
 
-        # Load audio file for chunking
-        from moviepy import AudioFileClip
-
-        audio = AudioFileClip(audio_file_path)
-        duration = audio.duration
+        logger.info(
+            f"File size exceeds chunk size, proceeding with chunking of file: {audio_file_path}"
+        )
+        audio = AudioSegment.from_mp3(audio_file_path)
+        duration = audio.duration_seconds
+        logger.info(f"Audio duration: {duration}s")
 
         # Calculate chunk duration (in seconds)
         chunk_duration = (chunk_size_mb / file_size_mb) * duration
+        logger.info(f"Calculated chunk duration: {chunk_duration}s")
 
         chunks = []
         chunk_count = 0
@@ -656,23 +726,34 @@ def chunk_audio_file(file_hash, audio_file_path, chunk_size_mb=25):
         current_time = 0
         while current_time < duration:
             end_time = min(current_time + chunk_duration, duration)
+            logger.info(f"Creating chunk {chunk_count}: {current_time}s to {end_time}s")
 
             # Create chunk
-            chunk_audio = audio.subclipped(current_time, end_time)
+            chunk_audio = audio[
+                current_time * 1000 : end_time * 1000
+            ]  # Convert seconds to milliseconds
+
+            logger.info(
+                f"Chunk {chunk_count} created: {current_time}s to {end_time}s, duration: {chunk_audio.duration_seconds}s"
+            )
 
             # Save chunk to temp file
-            chunk_path = tempfile.mktemp(suffix=f"_chunk_{chunk_count}.wav")
-            chunk_audio.write_audiofile(chunk_path, logger=None)
+            chunk_path = tempfile.mktemp(suffix=f"_chunk_{chunk_count}.mp3")
+
+            logger.info(f"Saving chunk {chunk_count} to: {chunk_path}")
+
+            chunk_audio.export(chunk_path, format="mp3")
 
             chunks.append(chunk_path)
-            chunk_count += 1
+
             current_time = end_time
 
             # Close chunk audio to free memory
-            chunk_audio.close()
+            logger.info(f"Chunk {chunk_count} saved: {chunk_path}")
 
-        # Close original audio
-        audio.close()
+            chunk_count += 1
+
+        logger.info(f"Audio chunking completed: {len(chunks)} chunks created")
 
         return {
             "success": True,
@@ -683,15 +764,22 @@ def chunk_audio_file(file_hash, audio_file_path, chunk_size_mb=25):
         }
 
     except Exception as e:
+        error_msg = f"Audio chunking failed: {str(e)}"
+        logger.error(error_msg)
         return {"success": False, "error": str(e), "chunks": [], "chunk_count": 0}
 
 
 def stream_transcription_chunked(client: AzureOpenAI, chunk_paths, language=None):
     """Transcribe multiple audio chunks and combine results"""
+    logger.info(
+        f"Starting chunked transcription: {len(chunk_paths)} chunks, language: {language}"
+    )
+
     full_transcription = ""
 
     for i, chunk_path in enumerate(chunk_paths):
         try:
+            logger.info(f"Transcribing chunk {i+1}/{len(chunk_paths)}: {chunk_path}")
             st.info(f"🎙️ Transcribing chunk {i+1}/{len(chunk_paths)}...")
 
             chunk_transcription = ""
@@ -723,24 +811,40 @@ def stream_transcription_chunked(client: AzureOpenAI, chunk_paths, language=None
                     full_transcription += " "
                 full_transcription += chunk_transcription.strip()
 
+            logger.info(
+                f"Chunk {i+1} transcription completed, length: {len(chunk_transcription)} chars"
+            )
+
             # Clean up chunk file
             try:
                 os.unlink(chunk_path)
-            except:
-                pass
+                logger.info(f"Cleaned up chunk file: {chunk_path}")
+            except Exception as cleanup_error:
+                logger.warning(
+                    f"Failed to cleanup chunk file {chunk_path}: {cleanup_error}"
+                )
 
         except Exception as e:
-            st.error(f"Error transcribing chunk {i+1}: {str(e)}")
+            error_msg = f"Error transcribing chunk {i+1}: {str(e)}"
+            logger.error(error_msg)
+            st.error(error_msg)
             yield f"Error in chunk {i+1}: {str(e)}"
 
+    logger.info(
+        f"Chunked transcription completed, total length: {len(full_transcription)} chars"
+    )
     # Final result
     yield full_transcription
 
 
 def start_transcription(transcription_language, client):
     """Start the transcription process with chunking support"""
+    logger.info(f"Starting transcription process, language: {transcription_language}")
+
     if not st.session_state.processed_audio_path:
-        st.error("❌ No audio file available for transcription")
+        error_msg = "No audio file available for transcription"
+        logger.error(error_msg)
+        st.error(f"❌ {error_msg}")
         return
 
     try:
@@ -748,9 +852,11 @@ def start_transcription(transcription_language, client):
         audio_file_path = st.session_state.processed_audio_path
         file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
 
+        logger.info(f"Audio file size for transcription: {file_size_mb:.1f}MB")
         st.info(f"📊 Audio file size: {file_size_mb:.1f} MB")
 
         if file_size_mb > 25:
+            logger.info("Large file detected, chunking required")
             st.warning("⚠️ Large file detected - chunking required for transcription")
 
             # Create chunking progress
@@ -760,46 +866,50 @@ def start_transcription(transcription_language, client):
                 )
 
             if not chunk_result["success"]:
-                st.error(
-                    f"❌ Failed to chunk audio file: {chunk_result.get('error', 'Unknown error')}"
-                )
+                error_msg = f"Failed to chunk audio file: {chunk_result.get('error', 'Unknown error')}"
+                logger.error(error_msg)
+                st.error(f"❌ {error_msg}")
                 return
 
+            logger.info(
+                f"Audio chunking successful: {chunk_result['chunk_count']} chunks"
+            )
             st.success(f"✅ Audio split into {chunk_result['chunk_count']} chunks")
 
-            # Create container for real-time updates
-            transcription_container = st.container()
+            # # Create container for real-time updates
+            # transcription_container = st.container()
 
-            with transcription_container:
-                st.subheader("📝 Live Transcription (Chunked)")
-                transcription_placeholder = st.empty()
+            # with transcription_container:
+            #     st.subheader("📝 Live Transcription (Chunked)")
+            #     transcription_placeholder = st.empty()
 
-            st.info("🎙️ Starting chunked transcription...")
+            # st.info("🎙️ Starting chunked transcription...")
 
-            full_transcription = ""
+            # full_transcription = ""
 
-            # Process chunks with streaming
-            for chunk_text in stream_transcription_chunked(
-                client, chunk_result["chunks"], transcription_language
-            ):
-                if chunk_text and not chunk_text.startswith("Error"):
-                    full_transcription = chunk_text
+            # # Process chunks with streaming
+            # for chunk_text in stream_transcription_chunked(
+            #     client, chunk_result["chunks"], transcription_language
+            # ):
+            #     if chunk_text and not chunk_text.startswith("Error"):
+            #         full_transcription = chunk_text
 
-                    # Update the display in real-time
-                    transcription_placeholder.text_area(
-                        "Live Transcription Stream (Chunked)",
-                        value=full_transcription,
-                        height=200,
-                        key=f"chunked_transcription_{len(full_transcription)}",
-                    )
+            #         # Update the display in real-time
+            #         transcription_placeholder.text_area(
+            #             "Live Transcription Stream (Chunked)",
+            #             value=full_transcription,
+            #             height=200,
+            #             key=f"chunked_transcription_{len(full_transcription)}",
+            #         )
 
-                    # Small delay to make streaming visible
-                    time.sleep(0.01)
-                elif chunk_text and chunk_text.startswith("Error"):
-                    st.error(chunk_text)
-                    return
+            #         # Small delay to make streaming visible
+            #         time.sleep(0.01)
+            #     elif chunk_text and chunk_text.startswith("Error"):
+            #         st.error(chunk_text)
+            #         return
 
         else:
+            logger.info("Starting single-file transcription")
             # Original single-file transcription
             # Create container for real-time updates
             transcription_container = st.container()
@@ -830,6 +940,7 @@ def start_transcription(transcription_language, client):
                     # Small delay to make streaming visible
                     time.sleep(0.01)
                 elif chunk and chunk.startswith("Error:"):
+                    logger.error(f"Transcription error: {chunk}")
                     st.error(chunk)
                     return
 
@@ -837,19 +948,28 @@ def start_transcription(transcription_language, client):
         st.session_state.transcription_text = full_transcription
         st.session_state.transcription_complete = True
 
+        logger.info(
+            f"Transcription completed successfully, length: {len(full_transcription)} chars"
+        )
         st.success("✅ Transcription completed!")
 
         # Rerun to show the next steps
         st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Error during transcription: {str(e)}")
+        error_msg = f"Error during transcription: {str(e)}"
+        logger.error(error_msg)
+        st.error(f"❌ {error_msg}")
 
 
 def start_translation(target_language, client):
     """Start the translation process"""
+    logger.info(f"Starting translation to {target_language}")
+
     if not st.session_state.transcription_text:
-        st.error("❌ No transcription available for translation")
+        error_msg = "No transcription available for translation"
+        logger.error(error_msg)
+        st.error(f"❌ {error_msg}")
         return
 
     try:
@@ -868,16 +988,22 @@ def start_translation(target_language, client):
             st.session_state.translation_text = translation_result["text"]
             st.session_state.translation_complete = True
 
+            logger.info(f"Translation to {target_language} completed successfully")
             st.success("✅ Translation completed!")
 
             # Rerun to show the translation result
             st.rerun()
         else:
-            st.error(f"Translation error: {translation_result['error']}")
+            error_msg = f"Translation error: {translation_result['error']}"
+            logger.error(error_msg)
+            st.error(error_msg)
 
     except Exception as e:
-        st.error(f"❌ Error during translation: {str(e)}")
+        error_msg = f"Error during translation: {str(e)}"
+        logger.error(error_msg)
+        st.error(f"❌ {error_msg}")
 
 
 if __name__ == "__main__":
+    logger.info("Starting main application")
     main()

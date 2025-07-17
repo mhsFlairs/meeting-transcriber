@@ -3,3 +3,6 @@ __pycache__
 gpt-4o.txt
 .env
 .idea
+*.log
+*.tmp
+main.py
